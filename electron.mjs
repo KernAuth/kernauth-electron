@@ -1,5 +1,3 @@
-// Electron main-process protocol example. Keep license checks out of the renderer.
-// node electron.mjs (Node 20+); adapt request() to an Electron IPC handler.
 import { createHash, createPublicKey, randomBytes, verify as verifySignature } from "node:crypto";
 import { Buffer } from "node:buffer";
 
@@ -7,6 +5,57 @@ const API = "https://api.kernauth.com";
 const APP_ID = "__PUBLIC_APP_ID__";
 const KEY_ID = "__KEY_ID__";
 const PUBLIC_KEY = "__PUBLIC_KEY__";
+
+export class KernAuth {
+  success = false;
+  message = "";
+
+  constructor(api = API, appId = APP_ID, keyId = KEY_ID, publicKey = PUBLIC_KEY) {
+    this.api = api;
+    this.appId = appId;
+    this.keyId = keyId;
+    this.publicKey = publicKey;
+  }
+
+  activate(licenseKey, installationId) {
+    return this.call("activate", licenseKey, installationId, "License is active");
+  }
+
+  validate(licenseKey, installationId) {
+    return this.call("validate", licenseKey, installationId, "License is active");
+  }
+
+  deactivate(licenseKey, installationId) {
+    return this.call("deactivate", licenseKey, installationId, "Device deactivated");
+  }
+
+  async call(mode, licenseKey, installationId, okMessage) {
+    try {
+      await request(mode, licenseKey, installationId, this.api, this.appId, this.keyId, this.publicKey);
+    } catch (error) {
+      this.success = false;
+      this.message = error instanceof Error ? error.message : "request failed";
+      return false;
+    }
+    this.success = true;
+    this.message = okMessage;
+    return true;
+  }
+}
+
+if (globalThis.process.argv[1]?.endsWith("electron.mjs")) {
+  const license = globalThis.process.env.KERN_LICENSE_KEY;
+  const installation = globalThis.process.env.KERN_INSTALLATION_ID;
+  if (!license || !installation) throw new Error("Set KERN_LICENSE_KEY and KERN_INSTALLATION_ID");
+  const app = new KernAuth(API, APP_ID, KEY_ID, PUBLIC_KEY);
+  if (!await app.activate(license, installation) ||
+      !await app.validate(license, installation) ||
+      !await app.deactivate(license, installation)) {
+    throw new Error(app.message);
+  }
+  globalThis.console.log(app.message);
+}
+
 const FIELDS = ["protocol_version", "entitlement_id", "application_id", "license_id", "status",
   "features", "device_id", "issued_at", "expires_at", "server_time", "nonce", "key_id"];
 
@@ -60,54 +109,4 @@ async function request(mode, licenseKey, installationId, api = API, appId = APP_
   if (mode === "deactivate") {
     if (grant.deactivated !== true) throw new Error("Deactivation was not confirmed");
   } else if (!verifyGrant(grant, nonce, appId, keyId, publicKey)) throw new Error("Invalid or expired signed entitlement");
-}
-
-export class KernAuth {
-  success = false;
-  message = "";
-
-  constructor(api = API, appId = APP_ID, keyId = KEY_ID, publicKey = PUBLIC_KEY) {
-    this.api = api;
-    this.appId = appId;
-    this.keyId = keyId;
-    this.publicKey = publicKey;
-  }
-
-  activate(licenseKey, installationId) {
-    return this.call("activate", licenseKey, installationId, "License is active");
-  }
-
-  validate(licenseKey, installationId) {
-    return this.call("validate", licenseKey, installationId, "License is active");
-  }
-
-  deactivate(licenseKey, installationId) {
-    return this.call("deactivate", licenseKey, installationId, "Device deactivated");
-  }
-
-  async call(mode, licenseKey, installationId, okMessage) {
-    try {
-      await request(mode, licenseKey, installationId, this.api, this.appId, this.keyId, this.publicKey);
-    } catch (error) {
-      this.success = false;
-      this.message = error instanceof Error ? error.message : "request failed";
-      return false;
-    }
-    this.success = true;
-    this.message = okMessage;
-    return true;
-  }
-}
-
-if (globalThis.process.argv[1]?.endsWith("electron.mjs")) {
-  const license = globalThis.process.env.KERN_LICENSE_KEY;
-  const installation = globalThis.process.env.KERN_INSTALLATION_ID; // Persist once per device.
-  if (!license || !installation) throw new Error("Set KERN_LICENSE_KEY and KERN_INSTALLATION_ID");
-  const app = new KernAuth(API, APP_ID, KEY_ID, PUBLIC_KEY);
-  if (!await app.activate(license, installation) ||
-      !await app.validate(license, installation) ||
-      !await app.deactivate(license, installation)) {
-    throw new Error(app.message);
-  }
-  globalThis.console.log(app.message);
 }
