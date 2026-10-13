@@ -46,12 +46,12 @@ export function verifyGrant(grant, nonce, app = APP_ID, keyId = KEY_ID, publicKe
   return verifySignature(null, canonical(ent), key, signature);
 }
 
-async function request(mode, licenseKey, installationId) {
+async function request(mode, licenseKey, installationId, api = API, appId = APP_ID, keyId = KEY_ID, publicKey = PUBLIC_KEY) {
   const nonce = randomBytes(24).toString("base64url");
   const fingerprint = createHash("sha256").update(`kernauth-device-v1:${installationId}`).digest("hex");
-  const response = await globalThis.fetch(`${API}/v1/client/${mode}`, {
+  const response = await globalThis.fetch(`${api}/v1/client/${mode}`, {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ protocol_version: 1, public_app_id: APP_ID, client_version: "1.0.0",
+    body: JSON.stringify({ protocol_version: 1, public_app_id: appId, client_version: "1.0.0",
       license_key: licenseKey, fingerprint_version: 1, device_fingerprint: fingerprint,
       installation_id: installationId, nonce }),
   });
@@ -59,13 +59,55 @@ async function request(mode, licenseKey, installationId) {
   const grant = await response.json();
   if (mode === "deactivate") {
     if (grant.deactivated !== true) throw new Error("Deactivation was not confirmed");
-  } else if (!verifyGrant(grant, nonce)) throw new Error("Invalid or expired signed entitlement");
+  } else if (!verifyGrant(grant, nonce, appId, keyId, publicKey)) throw new Error("Invalid or expired signed entitlement");
+}
+
+export class KernAuth {
+  success = false;
+  message = "";
+
+  constructor(api = API, appId = APP_ID, keyId = KEY_ID, publicKey = PUBLIC_KEY) {
+    this.api = api;
+    this.appId = appId;
+    this.keyId = keyId;
+    this.publicKey = publicKey;
+  }
+
+  activate(licenseKey, installationId) {
+    return this.call("activate", licenseKey, installationId, "License is active");
+  }
+
+  validate(licenseKey, installationId) {
+    return this.call("validate", licenseKey, installationId, "License is active");
+  }
+
+  deactivate(licenseKey, installationId) {
+    return this.call("deactivate", licenseKey, installationId, "Device deactivated");
+  }
+
+  async call(mode, licenseKey, installationId, okMessage) {
+    try {
+      await request(mode, licenseKey, installationId, this.api, this.appId, this.keyId, this.publicKey);
+    } catch (error) {
+      this.success = false;
+      this.message = error instanceof Error ? error.message : "request failed";
+      return false;
+    }
+    this.success = true;
+    this.message = okMessage;
+    return true;
+  }
 }
 
 if (globalThis.process.argv[1]?.endsWith("electron.mjs")) {
   const license = globalThis.process.env.KERN_LICENSE_KEY;
   const installation = globalThis.process.env.KERN_INSTALLATION_ID; // Persist once per device.
   if (!license || !installation) throw new Error("Set KERN_LICENSE_KEY and KERN_INSTALLATION_ID");
-  for (const mode of ["activate", "validate", "deactivate"]) await request(mode, license, installation);
-  globalThis.console.log("Signed entitlement verified and device deactivated");
+  const app = new KernAuth(API, APP_ID, KEY_ID, PUBLIC_KEY);
+  if (!await app.activate(license, installation) ||
+      !await app.validate(license, installation) ||
+      !await app.deactivate(license, installation)) {
+    throw new Error(app.message);
+  }
+  globalThis.console.log(app.message);
 }
