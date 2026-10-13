@@ -23,14 +23,6 @@ const app = new KernAuth(
 );
 ```
 
-## Activate
-
-```js
-if (!await app.activate(license, installation)) {
-  throw new Error(app.message);
-}
-```
-
 ## Validate
 
 ```js
@@ -38,16 +30,6 @@ if (!await app.validate(license, installation)) {
   throw new Error(app.message);
 }
 ```
-
-## Deactivate
-
-```js
-if (!await app.deactivate(license, installation)) {
-  throw new Error(app.message);
-}
-```
-
-`app.message` is `Device deactivated` after a successful deactivate.
 
 A patched program can still skip the check. These examples do not add anti-debug or anti-VM code.
 

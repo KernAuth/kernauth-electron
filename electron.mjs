@@ -17,16 +17,8 @@ export class KernAuth {
     this.publicKey = publicKey;
   }
 
-  activate(licenseKey, installationId) {
-    return this.call("activate", licenseKey, installationId, "License is active");
-  }
-
   validate(licenseKey, installationId) {
     return this.call("validate", licenseKey, installationId, "License is active");
-  }
-
-  deactivate(licenseKey, installationId) {
-    return this.call("deactivate", licenseKey, installationId, "Device deactivated");
   }
 
   async call(mode, licenseKey, installationId, okMessage) {
@@ -48,9 +40,7 @@ if (globalThis.process.argv[1]?.endsWith("electron.mjs")) {
   const installation = globalThis.process.env.KERN_INSTALLATION_ID;
   if (!license || !installation) throw new Error("Set KERN_LICENSE_KEY and KERN_INSTALLATION_ID");
   const app = new KernAuth(API, APP_ID, KEY_ID, PUBLIC_KEY);
-  if (!await app.activate(license, installation) ||
-      !await app.validate(license, installation) ||
-      !await app.deactivate(license, installation)) {
+  if (!await app.validate(license, installation)) {
     throw new Error(app.message);
   }
   globalThis.console.log(app.message);
@@ -106,7 +96,5 @@ async function request(mode, licenseKey, installationId, api = API, appId = APP_
   });
   if (!response.ok) throw new Error(`${mode} failed (${response.status})`);
   const grant = await response.json();
-  if (mode === "deactivate") {
-    if (grant.deactivated !== true) throw new Error("Deactivation was not confirmed");
-  } else if (!verifyGrant(grant, nonce, appId, keyId, publicKey)) throw new Error("Invalid or expired signed entitlement");
+  if (!verifyGrant(grant, nonce, appId, keyId, publicKey)) throw new Error("Invalid or expired signed entitlement");
 }
