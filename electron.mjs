@@ -85,14 +85,25 @@ function installationId() {
 }
 
 if (globalThis.process.argv[1]?.endsWith("electron.mjs")) {
+  const key = licenseKey();
+  const hwid = installationId();
   const app = new KernAuth(API, APP_ID, PUBLIC_KEY);
-  if (!await app.validate(licenseKey(), installationId())) {
+  if (!await app.validate(key, hwid)) {
     throw new Error(app.message);
   }
   globalThis.console.log(`Status: ${app.entitlement.status}`);
   globalThis.console.log(`Features: ${app.entitlement.features}`);
   globalThis.console.log(`License: ${app.entitlement.license_id}`);
   globalThis.console.log(`Check expires: ${app.entitlement.expires_at}`);
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 60_000));
+    try {
+      await heartbeat(key, hwid, API, APP_ID);
+    } catch (error) {
+      globalThis.console.log(error instanceof Error ? error.message : "heartbeat failed");
+      globalThis.process.exit(1);
+    }
+  }
 }
 
 const FIELDS = ["protocol_version", "entitlement_id", "application_id", "license_id", "status",
@@ -134,6 +145,26 @@ export function verifyGrant(grant, nonce, app = APP_ID, publicKey = PUBLIC_KEY, 
   return verifySignature(null, canonical(ent), key, signature);
 }
 
+async function failureMessage(response, fallback) {
+  const failure = await response.json().catch(() => null);
+  const message = failure?.error?.message;
+  return typeof message === "string" && message !== "" ? message : fallback;
+}
+
+async function heartbeat(licenseKey, installationId, api, appId) {
+  const nonce = randomBytes(24).toString("base64url");
+  const fingerprint = createHash("sha256").update(`kernauth-device-v1:${installationId}`).digest("hex");
+  const response = await globalThis.fetch(`${api}/v1/client/heartbeat`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ protocol_version: 1, public_app_id: appId, client_version: "1.0.0",
+      license_key: licenseKey, fingerprint_version: 1, device_fingerprint: fingerprint,
+      installation_id: installationId, nonce }),
+  });
+  if (!response.ok) throw new Error(await failureMessage(response, `heartbeat failed (${response.status})`));
+  const payload = await response.json().catch(() => null);
+  if (payload?.ok !== true) throw new Error("heartbeat failed");
+}
+
 async function request(mode, licenseKey, installationId, api = API, appId = APP_ID, publicKey = PUBLIC_KEY) {
   const nonce = randomBytes(24).toString("base64url");
   const fingerprint = createHash("sha256").update(`kernauth-device-v1:${installationId}`).digest("hex");
@@ -143,7 +174,7 @@ async function request(mode, licenseKey, installationId, api = API, appId = APP_
       license_key: licenseKey, fingerprint_version: 1, device_fingerprint: fingerprint,
       installation_id: installationId, nonce }),
   });
-  if (!response.ok) throw new Error(`${mode} failed (${response.status})`);
+  if (!response.ok) throw new Error(await failureMessage(response, `${mode} failed (${response.status})`));
   const grant = await response.json();
   if (!verifyGrant(grant, nonce, appId, publicKey)) throw new Error("Invalid or expired signed entitlement");
   return grant.entitlement;

@@ -24,7 +24,7 @@ console.log(`License: ${app.entitlement.license_id}`);
 console.log(`Check expires: ${app.entitlement.expires_at}`);
 ```
 
-A good check prints the status, the feature flags stored on the license, the license id, and when this check expires. Type the license key at the prompt. `KERN_LICENSE_KEY` skips the prompt. The program reads the HWID from the computer. On Windows that is the signed-in user's SID. `KERN_INSTALLATION_ID` overrides that HWID.
+A good check prints the status, the feature flags stored on the license, the license id, and when this check expires. Type the license key at the prompt. `KERN_LICENSE_KEY` skips the prompt. The program reads the HWID from the computer. On Windows that is the signed-in user's SID. `KERN_INSTALLATION_ID` overrides that HWID. The program then asks the server again every minute. If the session was ended, the key was paused, or this computer is blocked, it prints that message and exits.
 
 ## Run
 
