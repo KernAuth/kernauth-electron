@@ -11,18 +11,16 @@ for (const vector of fixture.vectors) {
     const now = Date.parse("2026-01-01T00:01:00Z");
     assert.equal(canonical(vector.fields).toString("utf8"), vector.canonical);
     assert.equal(verifyGrant(grant, vector.fields.nonce, vector.fields.application_id,
-      vector.fields.key_id, vector.public_key, now), true);
+      vector.public_key, now), true);
     assert.equal(verifyGrant(grant, "wrong", vector.fields.application_id,
-      vector.fields.key_id, vector.public_key, now), false);
+      vector.public_key, now), false);
     assert.equal(verifyGrant(grant, vector.fields.nonce, "pub_other_app",
-      vector.fields.key_id, vector.public_key, now), false);
-    assert.equal(verifyGrant(grant, vector.fields.nonce, vector.fields.application_id,
-      "wrong-key", vector.public_key, now), false);
+      vector.public_key, now), false);
     assert.equal(verifyGrant({ ...grant, signature: `${vector.signature}AA` }, vector.fields.nonce,
-      vector.fields.application_id, vector.fields.key_id, vector.public_key, now), false);
+      vector.fields.application_id, vector.public_key, now), false);
     assert.equal(verifyGrant(grant, vector.fields.nonce, vector.fields.application_id,
-      vector.fields.key_id, vector.public_key, Date.parse(vector.fields.expires_at)), false);
+      vector.public_key, Date.parse(vector.fields.expires_at)), false);
     assert.equal(verifyGrant({ ...grant, entitlement: { ...vector.fields, device_id: "other" } },
-      vector.fields.nonce, vector.fields.application_id, vector.fields.key_id, vector.public_key, now), false);
+      vector.fields.nonce, vector.fields.application_id, vector.public_key, now), false);
   });
 }

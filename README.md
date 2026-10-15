@@ -1,6 +1,6 @@
 # KernAuth Electron example
 
-Paste the public app ID, key ID, and public key from Developers into `electron.mjs`. Electron main process on Node 20 or newer. Keep the license key out of the renderer. Call validate from the main process and send only the result to the window.
+Paste the public app ID and public key from Developers into `electron.mjs`. Electron main process on Node 20 or newer. Keep the license key out of the renderer. Call validate from the main process and send only the result to the window.
 
 ## Instance
 
@@ -8,7 +8,6 @@ Paste the public app ID, key ID, and public key from Developers into `electron.m
 const app = new KernAuth(
   "https://api.kernauth.com",
   "__PUBLIC_APP_ID__",
-  "__KEY_ID__",
   "__PUBLIC_KEY__",
 );
 ```

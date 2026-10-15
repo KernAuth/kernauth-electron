@@ -5,7 +5,6 @@ import { readFileSync, readSync } from "node:fs";
 
 const API = "https://api.kernauth.com";
 const APP_ID = "__PUBLIC_APP_ID__";
-const KEY_ID = "__KEY_ID__";
 const PUBLIC_KEY = "__PUBLIC_KEY__";
 
 export class KernAuth {
@@ -13,10 +12,9 @@ export class KernAuth {
   message = "";
   entitlement = null;
 
-  constructor(api = API, appId = APP_ID, keyId = KEY_ID, publicKey = PUBLIC_KEY) {
+  constructor(api = API, appId = APP_ID, publicKey = PUBLIC_KEY) {
     this.api = api;
     this.appId = appId;
-    this.keyId = keyId;
     this.publicKey = publicKey;
   }
 
@@ -26,7 +24,7 @@ export class KernAuth {
 
   async call(mode, licenseKey, installationId, okMessage) {
     try {
-      const ent = await request(mode, licenseKey, installationId, this.api, this.appId, this.keyId, this.publicKey);
+      const ent = await request(mode, licenseKey, installationId, this.api, this.appId, this.publicKey);
       this.entitlement = {
         status: ent.status,
         features: JSON.stringify(sorted(typeof ent.features === "string" ? JSON.parse(ent.features) : ent.features)),
@@ -87,7 +85,7 @@ function installationId() {
 }
 
 if (globalThis.process.argv[1]?.endsWith("electron.mjs")) {
-  const app = new KernAuth(API, APP_ID, KEY_ID, PUBLIC_KEY);
+  const app = new KernAuth(API, APP_ID, PUBLIC_KEY);
   if (!await app.validate(licenseKey(), installationId())) {
     throw new Error(app.message);
   }
@@ -124,10 +122,10 @@ export function canonical(ent) {
   return Buffer.from(`${lines.join("\n")}\n`, "utf8");
 }
 
-export function verifyGrant(grant, nonce, app = APP_ID, keyId = KEY_ID, publicKey = PUBLIC_KEY, now = Date.now()) {
+export function verifyGrant(grant, nonce, app = APP_ID, publicKey = PUBLIC_KEY, now = Date.now()) {
   const ent = grant.entitlement;
   if (ent.protocol_version !== 1 || ent.nonce !== nonce || ent.application_id !== app ||
-      ent.key_id !== keyId || ent.status !== "active" || Date.parse(ent.expires_at) <= now) return false;
+      ent.status !== "active" || Date.parse(ent.expires_at) <= now) return false;
   const raw = decodeBase64(publicKey);
   const signature = decodeBase64(grant.signature);
   if (raw === null || raw.length !== 32 || signature === null || signature.length !== 64) return false;
@@ -136,7 +134,7 @@ export function verifyGrant(grant, nonce, app = APP_ID, keyId = KEY_ID, publicKe
   return verifySignature(null, canonical(ent), key, signature);
 }
 
-async function request(mode, licenseKey, installationId, api = API, appId = APP_ID, keyId = KEY_ID, publicKey = PUBLIC_KEY) {
+async function request(mode, licenseKey, installationId, api = API, appId = APP_ID, publicKey = PUBLIC_KEY) {
   const nonce = randomBytes(24).toString("base64url");
   const fingerprint = createHash("sha256").update(`kernauth-device-v1:${installationId}`).digest("hex");
   const response = await globalThis.fetch(`${api}/v1/client/${mode}`, {
@@ -147,6 +145,6 @@ async function request(mode, licenseKey, installationId, api = API, appId = APP_
   });
   if (!response.ok) throw new Error(`${mode} failed (${response.status})`);
   const grant = await response.json();
-  if (!verifyGrant(grant, nonce, appId, keyId, publicKey)) throw new Error("Invalid or expired signed entitlement");
+  if (!verifyGrant(grant, nonce, appId, publicKey)) throw new Error("Invalid or expired signed entitlement");
   return grant.entitlement;
 }
