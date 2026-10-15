@@ -1,6 +1,6 @@
 # KernAuth Electron example
 
-Protocol example for the Electron main process on Node 20+. This is not the official SDK. The official client is the C++ SDK. Keep the license key out of the renderer. Call these methods from the main process and send only the result to the window.
+Example for the Electron main process on Node 20 or newer. Keep the license key out of the renderer. Call these methods from the main process and send only the result to the window. This file calls validate and checks the Ed25519 signature.
 
 ## Add it
 
