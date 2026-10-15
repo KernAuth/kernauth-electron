@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, randomBytes, verify as verifySignature } from "node:crypto";
 import { Buffer } from "node:buffer";
-import { existsSync, readFileSync, readSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, readSync } from "node:fs";
 
 const API = "https://api.kernauth.com";
 const APP_ID = "__PUBLIC_APP_ID__";
@@ -62,16 +63,27 @@ function licenseKey() {
   return readLine();
 }
 
+function acceptableHwid(value) {
+  return /^[A-Za-z0-9_-]{8,64}$/.test(value);
+}
+
+function machineHwid() {
+  if (globalThis.process.platform === "win32") {
+    return execFileSync("powershell.exe", ["-NoProfile", "-Command", "[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value"], { encoding: "utf8" });
+  }
+  if (globalThis.process.platform === "darwin") {
+    const output = execFileSync("ioreg", ["-rd1", "-c", "IOPlatformExpertDevice"], { encoding: "utf8" });
+    return output.match(/"IOPlatformUUID" = "([^"]+)"/)?.[1] ?? "";
+  }
+  return readFileSync("/etc/machine-id", "utf8");
+}
+
 function installationId() {
   const fromEnv = globalThis.process.env.KERN_INSTALLATION_ID?.trim();
   if (fromEnv) return fromEnv;
-  if (existsSync("kernauth-install")) {
-    const saved = readFileSync("kernauth-install", "utf8").trim();
-    if (saved) return saved;
-  }
-  const created = randomBytes(16).toString("hex");
-  writeFileSync("kernauth-install", `${created}\n`);
-  return created;
+  const hwid = machineHwid().trim();
+  if (acceptableHwid(hwid)) return hwid;
+  throw new Error("Could not read the HWID");
 }
 
 if (globalThis.process.argv[1]?.endsWith("electron.mjs")) {
