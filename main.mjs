@@ -1,7 +1,25 @@
+import { createDecipheriv } from "node:crypto";
 import { readSync } from "node:fs";
 import { KernAuth } from "./kernauth.mjs";
 
 const app = new KernAuth("https://api.kernauth.com", "__PUBLIC_APP_ID__", "__PUBLIC_KEY__");
+
+function unwrapPayload(wrapKey, payloadBox) {
+  if (typeof wrapKey !== "string" || typeof payloadBox !== "string") return null;
+  try {
+    const key = Buffer.from(wrapKey, "base64");
+    const box = Buffer.from(payloadBox, "base64");
+    if (key.length !== 32 || box.length <= 28) return null;
+    const nonce = box.subarray(0, 12);
+    const tag = box.subarray(box.length - 16);
+    const data = box.subarray(12, box.length - 16);
+    const decipher = createDecipheriv("aes-256-gcm", key, nonce);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(data), decipher.final()]);
+  } catch {
+    return null;
+  }
+}
 
 function licenseKey() {
   const fromEnv = globalThis.process.env.KERN_LICENSE_KEY?.trim();
@@ -26,15 +44,15 @@ if (!await app.validate(key)) {
 const featureRecord = typeof app.entitlement.features === "string"
   ? JSON.parse(app.entitlement.features)
   : app.entitlement.features;
-const payloadKey = featureRecord?.payload_key;
-if (typeof payloadKey !== "string" || payloadKey === "") {
-  globalThis.console.log("Payload key is missing");
+const payloadKey = unwrapPayload(featureRecord?.wrap_key, featureRecord?.payload_box);
+if (payloadKey === null) {
+  globalThis.console.log("The payload key could not open this build.");
   globalThis.process.exit(1);
 }
-// Decrypt the program with this key. Drop it when the heartbeat fails.
+payloadKey.fill(0);
+// Decrypt the program with the opened key. Drop it when the heartbeat fails.
+globalThis.console.log("Payload opened");
 globalThis.console.log(`Status: ${app.entitlement.status}`);
-globalThis.console.log(`Features: ${app.entitlement.features}`);
-globalThis.console.log(`Payload key: ${payloadKey}`);
 globalThis.console.log(`License: ${app.entitlement.license_id}`);
 globalThis.console.log(`Check expires: ${app.entitlement.expires_at}`);
 for (;;) {
