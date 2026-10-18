@@ -23,8 +23,18 @@ if (!await app.validate(key)) {
   globalThis.console.log(app.message);
   globalThis.process.exit(1);
 }
+const featureRecord = typeof app.entitlement.features === "string"
+  ? JSON.parse(app.entitlement.features)
+  : app.entitlement.features;
+const payloadKey = featureRecord?.payload_key;
+if (typeof payloadKey !== "string" || payloadKey === "") {
+  globalThis.console.log("Payload key is missing");
+  globalThis.process.exit(1);
+}
+// Decrypt the program with this key. Drop it when the heartbeat fails.
 globalThis.console.log(`Status: ${app.entitlement.status}`);
 globalThis.console.log(`Features: ${app.entitlement.features}`);
+globalThis.console.log(`Payload key: ${payloadKey}`);
 globalThis.console.log(`License: ${app.entitlement.license_id}`);
 globalThis.console.log(`Check expires: ${app.entitlement.expires_at}`);
 for (;;) {

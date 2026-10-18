@@ -70,6 +70,7 @@ async function post(mode, licenseKey, api, appId, publicKey) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       protocol_version: 1, public_app_id: appId, client_version: "1.0.0", license_key: licenseKey,
+      ...(mode === "validate" ? { save_hwid: true } : {}),
       fingerprint_version: 1, device_fingerprint: fingerprint, installation_id: installation, nonce,
     }),
   });
