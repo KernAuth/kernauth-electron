@@ -6,9 +6,11 @@ Paste the public app ID and public key from Developers into `main.mjs`. Electron
 
 ```js
 const app = new KernAuth("https://api.kernauth.com", "__PUBLIC_APP_ID__", "__PUBLIC_KEY__");
+await app.initialize();
+await app.validate(key);
 ```
 
-Type the license at the prompt. `KERN_LICENSE_KEY` skips the prompt. The library reads the Windows user SID and checks the signature. The program then asks the server again every minute. If the session was ended, the key was paused, or this computer is blocked, it prints that message and exits.
+Call initialize before validate so the session salt and server time bucket are set. Type the license at the prompt. `KERN_LICENSE_KEY` skips the prompt. The library reads the Windows user SID and checks the signature. The program then asks the server again every minute. If the session was ended, the key was paused, or this computer is blocked, it prints that message and exits.
 
 ## Run
 

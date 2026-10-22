@@ -61,29 +61,6 @@ async function failureMessage(response, fallback) {
   return typeof message === "string" && message !== "" ? message : fallback;
 }
 
-async function post(mode, licenseKey, api, appId, publicKey) {
-  const installation = installationId();
-  const nonce = randomBytes(24).toString("base64url");
-  const fingerprint = createHash("sha256").update(`kernauth-device-v1:${installation}`).digest("hex");
-  const response = await fetch(`${api}/v1/client/${mode}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      protocol_version: 1, public_app_id: appId, client_version: "1.0.0", license_key: licenseKey,
-      ...(mode === "validate" ? { save_hwid: true } : {}),
-      fingerprint_version: 1, device_fingerprint: fingerprint, installation_id: installation, nonce,
-    }),
-  });
-  if (!response.ok) throw new Error(await failureMessage(response, `${mode} failed (${response.status})`));
-  const payload = await response.json();
-  if (mode === "heartbeat") {
-    if (payload?.ok !== true) throw new Error("heartbeat failed");
-    return null;
-  }
-  if (!verifyGrant(payload, nonce, appId, publicKey)) throw new Error("Invalid or expired signed entitlement");
-  return payload.entitlement;
-}
-
 export class KernAuth {
   constructor(api, appId, publicKey) {
     this.api = api;
@@ -91,11 +68,92 @@ export class KernAuth {
     this.publicKey = publicKey;
     this.message = "";
     this.entitlement = null;
+    this.installation = null;
+    this.sessionSalt = null;
+    this.timeBucket = null;
+  }
+
+  device() {
+    if (!this.installation) this.installation = installationId();
+    const fingerprint = createHash("sha256").update(`kernauth-device-v1:${this.installation}`).digest("hex");
+    return { installation: this.installation, fingerprint };
+  }
+
+  async initialize() {
+    try {
+      const { installation, fingerprint } = this.device();
+      this.sessionSalt = randomBytes(32).toString("hex");
+      this.timeBucket = null;
+      const nonce = randomBytes(24).toString("base64url");
+      const response = await fetch(`${this.api}/v1/client/initialize`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          protocol_version: 1,
+          public_app_id: this.appId,
+          client_version: "1.0.0",
+          fingerprint_version: 1,
+          device_fingerprint: fingerprint,
+          installation_id: installation,
+          session_salt: this.sessionSalt,
+          nonce,
+        }),
+      });
+      if (!response.ok) throw new Error(await failureMessage(response, `initialize failed (${response.status})`));
+      const payload = await response.json();
+      if (payload?.ok !== true || typeof payload.time_bucket !== "string" || payload.time_bucket === "") {
+        throw new Error("Initialize response was incomplete");
+      }
+      this.timeBucket = payload.time_bucket;
+      this.message = "Session ready";
+      return true;
+    } catch (error) {
+      this.sessionSalt = null;
+      this.timeBucket = null;
+      this.message = error instanceof Error ? error.message : "initialize failed";
+      return false;
+    }
+  }
+
+  async post(mode, licenseKey) {
+    const { installation, fingerprint } = this.device();
+    const nonce = randomBytes(24).toString("base64url");
+    const body = {
+      protocol_version: 1,
+      public_app_id: this.appId,
+      client_version: "1.0.0",
+      license_key: licenseKey,
+      fingerprint_version: 1,
+      device_fingerprint: fingerprint,
+      installation_id: installation,
+      nonce,
+    };
+    if (mode === "validate") {
+      if (!this.sessionSalt || !this.timeBucket) throw new Error("Call initialize first");
+      body.save_hwid = true;
+      body.session_salt = this.sessionSalt;
+      body.time_bucket = this.timeBucket;
+    }
+    const response = await fetch(`${this.api}/v1/client/${mode}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(await failureMessage(response, `${mode} failed (${response.status})`));
+    const payload = await response.json();
+    if (mode === "heartbeat") {
+      if (payload?.ok !== true) throw new Error("heartbeat failed");
+      return null;
+    }
+    if (!verifyGrant(payload, nonce, this.appId, this.publicKey)) {
+      throw new Error("Invalid or expired signed entitlement");
+    }
+    return payload.entitlement;
   }
 
   async validate(licenseKey) {
     try {
-      this.entitlement = await post("validate", licenseKey, this.api, this.appId, this.publicKey);
+      this.entitlement = await this.post("validate", licenseKey);
       this.message = "License is active";
       return true;
     } catch (error) {
@@ -106,6 +164,6 @@ export class KernAuth {
   }
 
   heartbeat(licenseKey) {
-    return post("heartbeat", licenseKey, this.api, this.appId, this.publicKey);
+    return this.post("heartbeat", licenseKey);
   }
 }

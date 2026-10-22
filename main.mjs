@@ -18,6 +18,10 @@ function licenseKey() {
   return text.split("\n")[0]?.trim() ?? "";
 }
 
+if (!await app.initialize()) {
+  globalThis.console.log(app.message);
+  globalThis.process.exit(1);
+}
 const key = licenseKey();
 if (!await app.validate(key)) {
   globalThis.console.log(app.message);
