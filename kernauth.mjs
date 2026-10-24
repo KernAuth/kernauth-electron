@@ -62,10 +62,11 @@ async function failureMessage(response, fallback) {
 }
 
 export class KernAuth {
-  constructor(api, appId, publicKey) {
+  constructor(api, appId, publicKey, version = "") {
     this.api = api;
     this.appId = appId;
     this.publicKey = publicKey;
+    this.version = version || "1.0.0";
     this.message = "";
     this.entitlement = null;
     this.installation = null;
@@ -91,7 +92,7 @@ export class KernAuth {
         body: JSON.stringify({
           protocol_version: 1,
           public_app_id: this.appId,
-          client_version: "1.0.0",
+          client_version: this.version,
           fingerprint_version: 1,
           device_fingerprint: fingerprint,
           installation_id: installation,
@@ -121,7 +122,7 @@ export class KernAuth {
     const body = {
       protocol_version: 1,
       public_app_id: this.appId,
-      client_version: "1.0.0",
+      client_version: this.version,
       license_key: licenseKey,
       fingerprint_version: 1,
       device_fingerprint: fingerprint,

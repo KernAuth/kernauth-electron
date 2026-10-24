@@ -10,7 +10,7 @@ await app.initialize();
 await app.validate(key);
 ```
 
-Call initialize before validate so the session salt and server time bucket are set. Type the license at the prompt. `KERN_LICENSE_KEY` skips the prompt. The library reads the Windows user SID and checks the signature. The program then asks the server again every minute. If the session was ended, the key was paused, or this computer is blocked, it prints that message and exits.
+Call initialize before validate so the session salt and server time bucket are set. The last argument is the version. Leave it out when Require this version is off: `new KernAuth(api, appId, publicKey, "1.0.0")`. Type the license at the prompt. `KERN_LICENSE_KEY` skips the prompt. The library reads the Windows user SID and checks the signature. The program then asks the server again every minute. If the session was ended, the key was paused, or this computer is blocked, it prints that message and exits.
 
 ## Run
 
